@@ -1,0 +1,7 @@
+{
+  "name": "Pro Tuner Web App",
+  "description": "A professional instrument tuner for Guitar (6, 7, 8 strings), Bass (4, 5, 6 strings), and Ukulele with Auto and Manual modes.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

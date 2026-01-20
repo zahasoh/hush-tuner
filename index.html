@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HUSH Tuner - Afinador Profesional</title>
+    
+    <!-- Librerías Externas -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body { background-color: #e4e4e4; font-family: 'Inter', sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
+        #root { width: 100%; display: flex; justify-content: center; min-height: 100vh; padding: 40px 15px; }
+        
+        .premium-card { 
+            background: white; 
+            border-radius: 4rem; 
+            box-shadow: 0 50px 100px -20px rgba(0,0,0,0.12); 
+            border: 1px solid white; 
+            width: 100%; 
+            max-width: 500px; 
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .pill-tab-container { background: #f1f5f9; border-radius: 2.5rem; padding: 6px; display: flex; width: 100%; }
+        .tab-active { background: white; color: #3772a6; box-shadow: 0 8px 20px -5px rgba(55, 114, 166, 0.2); }
+        
+        .gauge-transition { transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .note-card { box-shadow: 0 15px 35px rgba(55, 114, 166, 0.1); border: 1px solid #f8fafc; }
+
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 26px; width: 26px; border-radius: 50%;
+            background: #3772a6; cursor: pointer; margin-top: -9px; 
+            box-shadow: 0 4px 10px rgba(55, 114, 166, 0.3); border: 3px solid white;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 8px; background: #f1f5f9; border-radius: 10px;
+        }
+
+        .input-hush { 
+            background: #f8fafc; border: none; border-radius: 1.2rem; padding: 12px; 
+            font-weight: 900; color: #000000 !important; text-align: center; width: 100%;
+            font-size: 14px; outline: none; transition: background 0.2s;
+        }
+        .input-hush:focus { background: #f1f5f9; }
+
+        .brand-text { 
+            font-style: italic; 
+            font-size: 3.2rem; 
+            font-weight: 900; 
+            color: #3772a6; 
+            letter-spacing: -0.03em;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .section-label {
+            text-transform: uppercase;
+            font-weight: 900;
+            font-size: 10px;
+            letter-spacing: 0.15em;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            display: block;
+            margin-left: 4px;
+        }
+
+        .gauge-container {
+            position: relative;
+            width: 320px;
+            height: 160px;
+            overflow: hidden;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        .gauge-arch {
+            position: absolute;
+            top: 0;
+            width: 320px;
+            height: 320px;
+            border: 4px solid #f1f5f9;
+            border-radius: 50%;
+            clip-path: inset(0 0 50% 0);
+        }
+        .gauge-line {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 2px;
+            background: #f1f5f9;
+        }
+
+        .subdivision-btn {
+            width: 58px;
+            height: 58px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            background: #e2e8f0; 
+            border: 2px solid #cbd5e0;
+            color: #2d3748;
+        }
+        .subdivision-btn.active {
+            background: #3772a6;
+            color: white;
+            border-color: #3772a6;
+            box-shadow: 0 4px 12px rgba(55, 114, 166, 0.2);
+        }
+        .subdivision-btn svg {
+            width: 36px;
+            height: 36px;
+        }
+
+        details summary::-webkit-details-marker { display:none; }
+        summary { list-style: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        const COLORS = { HUSH: '#3772a6', LIGHT: '#99c8f2', OK: '#22c55e' };
+        const NOTES_LATIN = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
+
+        const TUNINGS = [
+            { id: 'g6', name: 'Guitarra (6 cuerdas)', strings: [{n:'Mi', f:329.63, s:1},{n:'Si', f:246.94, s:2},{n:'Sol', f:196.00, s:3},{n:'Re', f:146.83, s:4},{n:'La', f:110.00, s:5},{n:'Mi', f:82.41, s:6}] },
+            { id: 'g7', name: 'Guitarra (7 cuerdas)', strings: [{n:'Mi', f:329.63, s:1},{n:'Si', f:246.94, s:2},{n:'Sol', f:196.00, s:3},{n:'Re', f:146.83, s:4},{n:'La', f:110.00, s:5},{n:'Mi', f:82.41, s:6},{n:'Si', f:61.74, s:7}] },
+            { id: 'g8', name: 'Guitarra (8 cuerdas)', strings: [{n:'Mi', f:329.63, s:1},{n:'Si', f:246.94, s:2},{n:'Sol', f:196.00, s:3},{n:'Re', f:146.83, s:4},{n:'La', f:110.00, s:5},{n:'Mi', f:82.41, s:6},{n:'Si', f:61.74, s:7},{n:'Fa#', f:46.25, s:8}] },
+            { id: 'b4', name: 'Bajo (4 cuerdas)', strings: [{n:'Sol', f:98.00, s:1},{n:'Re', f:73.42, s:2},{n:'La', f:55.00, s:3},{n:'Mi', f:41.20, s:4}] },
+            { id: 'b5', name: 'Bajo (5 cuerdas)', strings: [{n:'Sol', f:98.00, s:1},{n:'Re', f:73.42, s:2},{n:'La', f:55.00, s:3},{n:'Mi', f:41.20, s:4},{n:'Si', f:30.87, s:5}] },
+            { id: 'b6', name: 'Bajo (6 cuerdas)', strings: [{n:'Do', f:130.81, s:1},{n:'Sol', f:98.00, s:2},{n:'Re', f:73.42, s:3},{n:'La', f:55.00, s:4},{n:'Mi', f:41.20, s:5},{n:'Si', f:30.87, s:6}] },
+            { id: 'uku', name: 'Ukulele', strings: [{n:'La', f:440.00, s:1},{n:'Mi', f:329.63, s:2},{n:'Do', f:261.63, s:3},{n:'Sol', f:392.00, s:4}] },
+            { id: 'chrom', name: 'Cromática', strings: [] }
+        ];
+
+        const TIME_SIGS = [
+            { name: '2/4', beats: 2 }, { name: '3/4', beats: 3 }, { name: '4/4', beats: 4 }, 
+            { name: '6/8', beats: 6 }, { name: '9/8', beats: 9 }, { name: '12/8', beats: 12 }
+        ];
+
+        const RhythmIcon = ({ type, color = 'currentColor' }) => {
+            const svgProps = { viewBox: "0 0 100 100", fill: "none", stroke: color, strokeWidth: "5", strokeLinecap: "round", strokeLinejoin: "round" };
+            switch(type) {
+                case '1': return (
+                    <svg {...svgProps}>
+                        <ellipse cx="35" cy="80" rx="10" ry="7" fill={color} stroke="none" />
+                        <path d="M45 80V25" />
+                    </svg>
+                );
+                case '2': return (
+                    <svg {...svgProps}>
+                        <ellipse cx="25" cy="80" rx="9" ry="6" fill={color} stroke="none" />
+                        <ellipse cx="75" cy="80" rx="9" ry="6" fill={color} stroke="none" />
+                        <path d="M34 80V25 H84V80" strokeWidth="6" />
+                    </svg>
+                );
+                case '3': return (
+                    <svg {...svgProps}>
+                        <ellipse cx="20" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="50" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="80" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <path d="M27 80V25 H87V80 M57 80V25" strokeWidth="6" />
+                        <path d="M25 18 Q57 8 89 18" strokeWidth="2" fill="none" />
+                        <text x="50" y="15" textAnchor="middle" fontSize="14" fontWeight="900" fill={color} stroke="none">3</text>
+                    </svg>
+                );
+                case '4': return (
+                    <svg {...svgProps}>
+                        <ellipse cx="18" cy="85" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="39" cy="85" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="61" cy="85" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="82" cy="85" rx="7" ry="5" fill={color} stroke="none" />
+                        <path d="M25 85V20 H89V85 M46 85V20 M68 85V20" strokeWidth="6" />
+                        <path d="M25 35 H89" strokeWidth="6" />
+                    </svg>
+                );
+                case 'dotted': return (
+                    <svg {...svgProps}>
+                        <ellipse cx="25" cy="80" rx="9" ry="6" fill={color} stroke="none" />
+                        <circle cx="42" cy="80" r="3" fill={color} stroke="none" />
+                        <ellipse cx="75" cy="80" rx="9" ry="6" fill={color} stroke="none" />
+                        <path d="M34 80V25 H84V80" strokeWidth="6" />
+                        <path d="M74 37 H84" strokeWidth="6" />
+                    </svg>
+                );
+                case 'rev-dotted': return (
+                    <svg {...svgProps}>
+                        <ellipse cx="25" cy="80" rx="9" ry="6" fill={color} stroke="none" />
+                        <ellipse cx="75" cy="80" rx="9" ry="6" fill={color} stroke="none" />
+                        <circle cx="92" cy="80" r="3" fill={color} stroke="none" />
+                        <path d="M34 80V25 H84V80" strokeWidth="6" />
+                        <path d="M34 37 H44" strokeWidth="6" />
+                    </svg>
+                );
+                case '8-2-16': return (
+                    <svg {...svgProps}>
+                        <ellipse cx="20" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="50" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="80" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <path d="M27 80V25 H87V80 M57 80V25" strokeWidth="6" />
+                        <path d="M57 37 H87" strokeWidth="6" />
+                    </svg>
+                );
+                case '2-16-8': return (
+                    <svg {...svgProps}>
+                        <ellipse cx="20" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="50" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <ellipse cx="80" cy="80" rx="7" ry="5" fill={color} stroke="none" />
+                        <path d="M27 80V25 H87V80 M57 80V25" strokeWidth="6" />
+                        <path d="M27 37 H57" strokeWidth="6" />
+                    </svg>
+                );
+                default: return null;
+            }
+        };
+
+        const SUBDIVISIONS = [
+            { id: '1', ticks: 1, pattern: [1] },
+            { id: '2', ticks: 2, pattern: [1, 1] },
+            { id: '3', ticks: 3, pattern: [1, 1, 1] },
+            { id: '4', ticks: 4, pattern: [1, 1, 1, 1] },
+            { id: 'dotted', ticks: 4, pattern: [1, 0, 0, 1] },
+            { id: 'rev-dotted', ticks: 4, pattern: [1, 1, 0, 0] },
+            { id: '8-2-16', ticks: 4, pattern: [1, 0, 1, 1] },
+            { id: '2-16-8', ticks: 4, pattern: [1, 1, 1, 0] }
+        ];
+
+        class AudioEngine {
+            constructor() {
+                this.ctx = null; this.analyser = null; this.stream = null; this.osc = null; this.buf = new Float32Array(2048);
+            }
+            async init() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.ctx.state === 'suspended') await this.ctx.resume();
+            }
+            async startMic() {
+                await this.init();
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const src = this.ctx.createMediaStreamSource(this.stream);
+                    this.analyser = this.ctx.createAnalyser();
+                    this.analyser.fftSize = 2048;
+                    src.connect(this.analyser);
+                    return true;
+                } catch (e) { return false; }
+            }
+            stopMic() { if (this.stream) this.stream.getTracks().forEach(t => t.stop()); this.stream = null; this.analyser = null; }
+            getFreq() {
+                if (!this.analyser) return -1;
+                this.analyser.getFloatTimeDomainData(this.buf);
+                let rms = 0; for (let i = 0; i < this.buf.length; i++) rms += this.buf[i] * this.buf[i];
+                if (Math.sqrt(rms/this.buf.length) < 0.01) return -1;
+                let size = this.buf.length; let c = new Float32Array(size).fill(0);
+                for (let i = 0; i < size; i++) { for (let j = 0; j < size - i; j++) c[i] = c[i] + this.buf[j] * this.buf[j+i]; }
+                let d = 0; while (c[d] > c[d+1]) d++;
+                let maxv = -1, maxp = -1;
+                for (let i = d; i < size; i++) { if (c[i] > maxv) { maxv = c[i]; maxp = i; } }
+                return this.ctx.sampleRate / maxp;
+            }
+            play(f) {
+                this.stop(); if (!this.ctx) return;
+                this.osc = this.ctx.createOscillator(); const g = this.ctx.createGain();
+                this.osc.frequency.value = f; g.gain.setValueAtTime(0, this.ctx.currentTime);
+                g.gain.linearRampToValueAtTime(0.2, this.ctx.currentTime + 0.05);
+                this.osc.connect(g); g.connect(this.ctx.destination); this.osc.start();
+            }
+            stop() { if (this.osc) { try { this.osc.stop(); } catch(e){} this.osc = null; } }
+            click(f, v) {
+                if (!this.ctx) return; const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+                o.frequency.value = f; g.gain.setValueAtTime(v, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+                o.connect(g); g.connect(this.ctx.destination); o.start(); o.stop(this.ctx.currentTime + 0.05);
+            }
+        }
+        const engine = new AudioEngine();
+
+        const Tuner = () => {
+            const [inst, setInst] = useState(TUNINGS[0]);
+            const [mode, setMode] = useState('auto');
+            const [active, setActive] = useState(false);
+            const [note, setNote] = useState(null);
+            const [strIdx, setStrIdx] = useState(null);
+            const [refFreq, setRefFreq] = useState(440);
+
+            useEffect(() => {
+                let frame;
+                const loop = () => {
+                    if (active && mode === 'auto') {
+                        let f = engine.getFreq();
+                        if (f > 15) {
+                            const isChrom = inst.id === 'chrom';
+                            if (!isChrom && strIdx !== null) {
+                                const targetF = inst.strings[strIdx].f * (refFreq/440);
+                                const diffCents = Math.abs(1200 * Math.log2(f / targetF));
+                                if (diffCents > 150) { frame = requestAnimationFrame(loop); return; }
+                            }
+                            const n = 12 * (Math.log(f / refFreq) / Math.log(2));
+                            const norm = Math.round(n) + 69;
+                            const noteIndex = ((norm % 12) + 12) % 12;
+                            setNote({ name: NOTES_LATIN[noteIndex], cents: Math.floor((n - Math.round(n)) * 100) });
+                            if (isChrom) { setStrIdx(null); } 
+                            else if (strIdx === null) {
+                                let closest = -1, minDiff = Infinity;
+                                inst.strings.forEach((s, i) => { 
+                                    const targetF = s.f * (refFreq/440);
+                                    const d = Math.abs(f - targetF); 
+                                    if (d < minDiff) { minDiff = d; closest = i; } 
+                                });
+                                if (minDiff < 40) setStrIdx(closest);
+                            }
+                        } else { setNote(null); if (inst.id === 'chrom') setStrIdx(null); }
+                    }
+                    frame = requestAnimationFrame(loop);
+                };
+                loop(); return () => cancelAnimationFrame(frame);
+            }, [active, mode, inst, refFreq, strIdx]);
+
+            const toggleAuto = async () => {
+                if (!active) { if (await engine.startMic()) setActive(true); } 
+                else { engine.stopMic(); setActive(false); setNote(null); setStrIdx(null); }
+            };
+
+            const handleStringPress = async (s, i) => {
+                await engine.init();
+                if (mode === 'manual') {
+                    if (strIdx === i) { engine.stop(); setStrIdx(null); }
+                    else { engine.play(s.f * (refFreq/440)); setStrIdx(i); }
+                } else { setStrIdx(i === strIdx ? null : i); }
+            };
+
+            return (
+                <div className="flex flex-col items-center w-full">
+                    <div className="pill-tab-container mb-10 max-w-[300px]">
+                        <button onClick={() => {setMode('auto'); engine.stop(); setStrIdx(null);}} className={`flex-1 py-3 rounded-[2rem] text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'auto' ? 'tab-active' : 'text-gray-400'}`}>Auto</button>
+                        <button onClick={() => {setMode('manual'); setActive(false); engine.stopMic(); setNote(null); setStrIdx(null);}} className={`flex-1 py-3 rounded-[2rem] text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'manual' ? 'tab-active' : 'text-gray-400'}`}>De oído</button>
+                    </div>
+                    <div className="gauge-container mb-8">
+                        <div className="gauge-arch"></div>
+                        <div className="gauge-line"></div>
+                        {[...Array(11)].map((_, i) => (
+                             <div key={i} className="absolute left-1/2 bottom-0 w-0.5 h-4 origin-bottom -translate-x-1/2" style={{ transform: `rotate(${(-90 + i * 18)}deg) translateY(-148px)`, backgroundColor: i === 5 ? COLORS.HUSH : '#e5e7eb' }}></div>
+                        ))}
+                        <div className="absolute bottom-0 w-1.5 h-36 origin-bottom gauge-transition z-20" style={{ transform: `rotate(${active && note ? note.cents * 1.5 : 0}deg)`, backgroundColor: active && note && Math.abs(note.cents) < 5 ? COLORS.OK : COLORS.HUSH }}>
+                            <div className="absolute -bottom-1.5 -left-1.5 w-4.5 h-4.5 rounded-full bg-gray-800 border-2 border-white"></div>
+                        </div>
+                        <div className="z-30 note-card bg-white px-10 py-6 rounded-3xl -mb-4 flex flex-col items-center min-w-[150px]">
+                            <span className="text-6xl font-black text-[#3772a6] tracking-tighter leading-none">{note ? note.name : (strIdx !== null && mode === 'manual' ? inst.strings[strIdx].n : '--')}</span>
+                            {strIdx !== null && <span className="text-[10px] font-black text-gray-400 mt-2 uppercase">{inst.id !== 'chrom' ? `Cuerda ${inst.strings[strIdx].s}` : 'Objetivo'}</span>}
+                        </div>
+                    </div>
+                    <div className="w-full flex flex-col gap-6 mt-6">
+                        <div className="grid grid-cols-12 gap-3">
+                            <div className="col-span-8">
+                                <span className="section-label">Instrumento</span>
+                                <select value={inst.id} onChange={e => {setInst(TUNINGS.find(t => t.id === e.target.value)); engine.stop(); setStrIdx(null);}} className="input-hush cursor-pointer">
+                                    {TUNINGS.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="col-span-4">
+                                <span className="section-label">La5 (Hz)</span>
+                                <input type="number" value={refFreq} onChange={e => setRefFreq(parseInt(e.target.value) || 440)} className="input-hush" />
+                            </div>
+                        </div>
+                        {inst.id !== 'chrom' ? (
+                            <div className="flex flex-wrap justify-center gap-2">
+                                {inst.strings.map((s, i) => (
+                                    <button key={i} onClick={() => handleStringPress(s, i)} className={`w-12 h-12 rounded-2xl font-black text-[11px] transition-all border-2 ${strIdx === i ? 'bg-[#3772a6] border-[#3772a6] text-white shadow-lg scale-110' : 'bg-white border-gray-100 text-gray-400 hover:border-blue-200'}`}>
+                                        {s.n}({s.s})
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 rounded-xl">Modo Cromático Libre</div>
+                        )}
+                    </div>
+                    {/* Botón de micrófono restaurado y asegurado para modo automático */}
+                    {mode === 'auto' && (
+                        <div className="mt-8 flex justify-center">
+                            <button onClick={toggleAuto} className={`w-20 h-20 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 ${active ? 'bg-red-500' : 'bg-[#3772a6]'}`}>
+                                {active ? (
+                                    <div className="w-6 h-6 bg-white rounded-md"></div>
+                                ) : (
+                                    <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"/>
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const Metronome = () => {
+            const [bpm, setBpm] = useState(120);
+            const [on, setOn] = useState(false);
+            const [beat, setBeat] = useState(0);
+            const [subTick, setSubTick] = useState(0);
+            const [timeSig, setTimeSig] = useState(TIME_SIGS[2]);
+            const [subdiv, setSubdiv] = useState(SUBDIVISIONS[0]);
+            const [accents, setAccents] = useState(['strong', 'normal', 'normal', 'normal']);
+            const [timerLimit, setTimerLimit] = useState(0); 
+            const [timeLeft, setTimeLeft] = useState(0); 
+            const [startTime, setStartTime] = useState(null);
+            const [progMode, setProgMode] = useState('off');
+            const [progStep, setProgStep] = useState(5);
+            const [progTrigger, setProgTrigger] = useState(4);
+            const [barsCount, setBarsCount] = useState(0);
+            const [lastProgPoint, setLastProgPoint] = useState(0);
+
+            const timerRef = useRef(null);
+            const isEightBase = timeSig.name.endsWith('/8');
+
+            useEffect(() => { 
+                let pattern = Array(timeSig.beats).fill('normal');
+                pattern[0] = 'strong';
+                if (timeSig.name === '4/4') {
+                    pattern[2] = 'soft';
+                } else if (timeSig.name === '6/8') {
+                    pattern[3] = 'soft';
+                } else if (timeSig.name === '9/8') {
+                    pattern[3] = 'soft'; pattern[6] = 'soft';
+                } else if (timeSig.name === '12/8') {
+                    pattern[3] = 'soft'; pattern[6] = 'soft'; pattern[9] = 'soft';
+                }
+                setAccents(pattern); 
+            }, [timeSig]);
+
+            useEffect(() => {
+                if (on) {
+                    const actualBpm = isEightBase ? bpm * 3 : bpm;
+                    const tickInterval = (60000 / actualBpm) / subdiv.ticks;
+                    
+                    timerRef.current = setInterval(() => {
+                        setSubTick(st => {
+                            const nextST = (st % subdiv.ticks) + 1;
+                            if (subdiv.pattern[nextST - 1] === 1) {
+                                if (nextST === 1) {
+                                    setBeat(b => {
+                                        const nextB = (b % timeSig.beats) + 1;
+                                        const acc = accents[nextB - 1];
+                                        const freq = acc === 'strong' ? 1200 : acc === 'normal' ? 800 : acc === 'soft' ? 600 : 0;
+                                        const vol = acc === 'strong' ? 0.6 : acc === 'soft' ? 0.15 : 0.35;
+                                        engine.click(freq, vol);
+                                        
+                                        if (nextB === 1) {
+                                            setBarsCount(bc => {
+                                                const nbc = bc + 1;
+                                                if (progMode === 'bars' && nbc % Math.round(progTrigger) === 0) {
+                                                    setBpm(old => Math.min(240, old + progStep));
+                                                }
+                                                return nbc;
+                                            });
+                                        }
+                                        return nextB;
+                                    });
+                                } else { engine.click(600, 0.1); }
+                            }
+                            return nextST;
+                        });
+                        if (startTime) {
+                            const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+                            const totalLimitSec = timerLimit * 60;
+                            if (totalLimitSec > 0) {
+                                const rem = Math.max(0, totalLimitSec - elapsedSec);
+                                setTimeLeft(rem);
+                                if (rem === 0) { setOn(false); return; }
+                            }
+                            if (progMode === 'time') {
+                                const elapsedMin = elapsedSec / 60;
+                                const point = Math.floor(elapsedMin / progTrigger);
+                                if (point > lastProgPoint) {
+                                    setLastProgPoint(point);
+                                    setBpm(old => Math.min(240, old + progStep));
+                                }
+                            }
+                        }
+                    }, tickInterval);
+                } else {
+                    clearInterval(timerRef.current); setBeat(0); setSubTick(0); setTimeLeft(timerLimit * 60);
+                }
+                return () => clearInterval(timerRef.current);
+            }, [on, bpm, timeSig, accents, subdiv, progMode, progStep, progTrigger, timerLimit, startTime, lastProgPoint, isEightBase]);
+
+            const nextAcc = (i) => {
+                const seq = ['strong', 'soft', 'normal', 'mute'];
+                const na = [...accents]; na[i] = seq[(seq.indexOf(accents[i]) + 1) % seq.length]; setAccents(na);
+            };
+
+            const startMet = async () => { 
+                await engine.init(); 
+                if (!on) { 
+                    setStartTime(Date.now()); setBarsCount(0); setLastProgPoint(0); 
+                    setTimeLeft(timerLimit * 60);
+                } 
+                setOn(!on); 
+            };
+
+            return (
+                <div className="w-full flex flex-col items-center">
+                    <div className="text-[90px] leading-none font-black text-[#3772a6] mb-6 flex items-center justify-center tracking-tighter select-none">
+                        <div className="flex items-center">
+                            <div className="flex items-center mr-6">
+                                <span className={`text-6xl translate-y-2 opacity-60 ${isEightBase ? 'mr-1' : ''}`}>♩</span>
+                                {isEightBase && <span className="text-6xl translate-y-2 opacity-60 mr-2">.</span>}
+                            </div>
+                            <div className="flex items-baseline">
+                                {bpm}
+                                <span className="text-lg text-gray-300 ml-4 font-black uppercase tracking-widest pt-10">BPM</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {timerLimit > 0 && (
+                        <div className="text-xs font-black text-gray-400 mb-6 bg-gray-50 px-4 py-1.5 rounded-full border border-gray-100 flex items-center gap-2">
+                             <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+                             {timeLeft > 0 ? `RESTANTE: ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}` : 'TIEMPO TERMINADO'}
+                        </div>
+                    )}
+                    
+                    <input type="range" min="40" max="240" value={bpm} onChange={e => setBpm(parseInt(e.target.value))} className="mb-10" />
+                    
+                    <div className="flex justify-center flex-wrap gap-4 mb-10 h-10 items-center">
+                        {accents.map((acc, i) => (
+                            <button key={i} onClick={() => nextAcc(i)} className={`rounded-full transition-all border-2 ${beat === i+1 ? 'scale-125 shadow-md' : 'scale-100'} ${acc === 'strong' ? 'w-6 h-6 bg-[#3772a6] border-[#3772a6]' : acc === 'soft' ? 'w-5 h-5 bg-[#99c8f2] border-[#99c8f2]' : acc === 'normal' ? 'w-4 h-4 bg-gray-100 border-[#99c8f2]' : 'w-4 h-4 bg-transparent border-gray-100'}`}></button>
+                        ))}
+                    </div>
+
+                    <div className="flex flex-col gap-6 w-full mb-10">
+                        <details className="w-full group">
+                            <summary className="section-label text-center w-full mb-4 cursor-pointer hover:text-blue-500 transition-colors flex items-center justify-center gap-2 py-3 bg-gray-50 rounded-2xl">
+                                <span>Subdivisiones</span>
+                                <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </summary>
+                            <div className="grid grid-cols-4 gap-3 bg-gray-100/30 p-5 rounded-3xl border border-gray-100 animate-in fade-in zoom-in duration-200">
+                                {SUBDIVISIONS.map(s => (
+                                    <button key={s.id} onClick={() => setSubdiv(s)} className={`subdivision-btn ${subdiv.id === s.id ? 'active' : ''}`}>
+                                        <RhythmIcon type={s.id} color={subdiv.id === s.id ? 'white' : '#3772a6'} />
+                                    </button>
+                                ))}
+                            </div>
+                        </details>
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                            {TIME_SIGS.map(ts => (
+                                <button key={ts.name} onClick={() => setTimeSig(ts)} className={`px-3 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${timeSig.name === ts.name ? 'bg-[#3772a6] text-white shadow-md' : 'bg-gray-50 text-gray-400'}`}>{ts.name}</button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div className="w-full flex flex-col gap-6 mb-10 bg-gray-50 p-6 rounded-[2.5rem] border border-white">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <span className="section-label">Temporizador (Min)</span>
+                                <input type="number" value={timerLimit} onChange={e => {setTimerLimit(Math.max(0, parseFloat(e.target.value) || 0)); setTimeLeft(Math.max(0, parseFloat(e.target.value) || 0) * 60);}} className="input-hush" />
+                            </div>
+                            <div>
+                                <span className="section-label">Automatizador BPM</span>
+                                <select value={progMode} onChange={e => setProgMode(e.target.value)} className="input-hush">
+                                    <option value="off">Apagado</option>
+                                    <option value="bars">Compases</option>
+                                    <option value="time">Minutos</option>
+                                </select>
+                            </div>
+                        </div>
+                        {/* Se añaden campos para elegir cuánto subir y cada cuánto, según el modo seleccionado */}
+                        {progMode !== 'off' && (
+                            <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-300">
+                                <div>
+                                    <span className="section-label">Subir (+BPM)</span>
+                                    <input type="number" value={progStep} onChange={e => setProgStep(parseInt(e.target.value) || 1)} className="input-hush" />
+                                </div>
+                                <div>
+                                    <span className="section-label">{progMode === 'bars' ? 'Cada X Compases' : 'Cada X Minutos'}</span>
+                                    <input type="number" step="1" value={progTrigger} onChange={e => setProgTrigger(Math.max(1, parseFloat(e.target.value) || 1))} className="input-hush" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <button onClick={startMet} className="w-full py-6 rounded-[2.5rem] bg-[#3772a6] text-white font-black text-2xl shadow-xl active:scale-95 transition-all uppercase tracking-[0.2em]">
+                        {on ? 'Detener' : 'Iniciar'}
+                    </button>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [tab, setTab] = useState('tuner');
+            return (
+                <div className="flex flex-col items-center w-full">
+                    <header className="text-center mb-10">
+                        <h1 className="brand-text">HUSH TUNER</h1>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] mt-2">Afinador Profesional & Metrónomo</p>
+                    </header>
+                    <div className="premium-card">
+                        <div className="pill-tab-container">
+                            <button onClick={() => {setTab('tuner'); engine.stop();}} className={`flex-1 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all ${tab === 'tuner' ? 'tab-active' : 'text-gray-400'}`}>Afinador</button>
+                            <button onClick={() => {setTab('metronome'); engine.stopMic(); engine.stop();}} className={`flex-1 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all ${tab === 'metronome' ? 'tab-active' : 'text-gray-400'}`}>Metrónomo</button>
+                        </div>
+                        <div className="w-full">{tab === 'tuner' ? <Tuner /> : <Metronome />}</div>
+                    </div>
+                    <footer className="mt-14 text-center">
+                        <p className="text-[14px] font-black text-[#3772a6] tracking-[0.5em] mb-1 italic uppercase">HUSH TUNER</p>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.4em] opacity-60">Estabilidad Total • Precisión Absoluta</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
